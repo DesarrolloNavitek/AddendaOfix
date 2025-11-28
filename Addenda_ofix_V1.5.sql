@@ -120,10 +120,10 @@ RETURN(@TotalBultos)
 END
 GO
 /************************** Vista **************************/
-IF EXISTS (SELECT * FROM SYSOBJECTS WHERE ID = OBJECT_ID('dbo.CFDIVentaV4') AND type = 'V')
-DROP VIEW [dbo].[CFDIVentaV4]
+IF EXISTS (SELECT * FROM SYSOBJECTS WHERE ID = OBJECT_ID('dbo.CFDIVentaAddendas') AND type = 'V')
+DROP VIEW [dbo].[CFDIVentaAddendas]
 GO
-CREATE VIEW [dbo].[CFDIVentaV4]          
+CREATE VIEW [dbo].[CFDIVentaAddendas]         
 AS          
         
 SELECT DISTINCT REPLICATE('0',20-LEN(RTRIM(LTRIM(CONVERT(varchar,Vta.ID))))) + RTRIM(LTRIM(CONVERT(varchar,Vta.ID))) +          
@@ -244,10 +244,10 @@ LEFT JOIN VentaCFDIRelacionado vr ON vr.ID=vta.ID
 GO
 /*********************************************  CFDIVentaDV4  *************************************************************/
 
-IF EXISTS (SELECT * FROM SYSOBJECTS WHERE ID = OBJECT_ID ('CFDIVentaDV4') AND TYPE ='V')
-DROP VIEW CFDIVentaDV4
+IF EXISTS (SELECT * FROM SYSOBJECTS WHERE ID = OBJECT_ID ('CFDIVentaDAddendas') AND TYPE ='V')
+DROP VIEW CFDIVentaDAddendas
 GO  
- CREATE VIEW CFDIVentaDV4
+ CREATE VIEW CFDIVentaDAddendas
 AS      
     
   SELECT REPLICATE('0',20-LEN(RTRIM(LTRIM(CONVERT(varchar,VD.ID))))) + RTRIM(LTRIM(CONVERT(varchar,VD.ID))) +      
@@ -471,7 +471,7 @@ IF EXISTS (SELECT * FROM eDocD WHERE Modulo = 'VTAS' and eDoc = 'OFIX')
 DELETE FROM eDocD WHERE Modulo = 'VTAS' AND eDoc = 'OFIX'
 GO
 INSERT INTO eDocD (Modulo,eDoc,Orden,Seccion,SubSeccionDe,Vista,Cierre,TablaSt)
-SELECT Modulo,'OFIX',Orden,CASE WHEN Seccion = 'Tony' THEN 'Encabezado' WHEN Seccion = 'Detalles' THEN 'Detalle' ELSE Seccion END,SubSeccionDe,CASE WHEN Seccion ='Detalles' THEN 'CFDIVentaDV4' ELSE 'CFDIVentaV4' END,Cierre,TablaSt 
+SELECT Modulo,'OFIX',Orden,CASE WHEN Seccion = 'Tony' THEN 'Encabezado' WHEN Seccion = 'Detalles' THEN 'Detalle' ELSE Seccion END,SubSeccionDe,CASE WHEN Seccion ='Detalle' THEN 'CFDIVentaDAddendas' ELSE 'CFDIVentaAddendas' END,Cierre,TablaSt 
 FROM eDocD 
  WHERE Modulo = 'VTAS' and eDoc = 'TONY'
 GO
@@ -684,4 +684,5 @@ INSERT INTO eDocXSD (Modulo, Clave, XSD) SELECT 'VTAS', 'OFIX',
 </xs:schema>'
 */
 /* xsd table*/    
+
 --EXEC spCFDFlexGenerarxmlSchema 'VTAS', 'OFIX'
