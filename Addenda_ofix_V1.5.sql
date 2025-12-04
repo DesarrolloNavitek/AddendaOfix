@@ -44,6 +44,169 @@ VALUES
  ('31606001000',' ','9067',NULL,NULL,'ACTIVO','830056',NULL,1,NULL),
  ('31606000500',' ','9067',NULL,NULL,'ACTIVO','830055',NULL,1,NULL)*/
 
+ /************************** Sucursales del cliente **************************/
+/*
+UPDATE CteEnviarA SET Plano = 10 WHERE Cliente ='9067' AND ID = 2
+UPDATE CteEnviarA SET Plano = 12 WHERE Cliente ='9067' AND ID = 3
+UPDATE CteEnviarA SET Plano = 15WHERE Cliente ='9067' AND ID = 4
+UPDATE CteEnviarA SET Plano = 16WHERE Cliente ='9067' AND ID = 5
+UPDATE CteEnviarA SET Plano = 19WHERE Cliente ='9067' AND ID = 6
+UPDATE CteEnviarA SET Plano = 20WHERE Cliente ='9067' AND ID = 7
+UPDATE CteEnviarA SET Plano = 21WHERE Cliente ='9067' AND ID = 8
+UPDATE CteEnviarA SET Plano = 30WHERE Cliente ='9067' AND ID = 9
+UPDATE CteEnviarA SET Plano = 32WHERE Cliente ='9067' AND ID = 10
+UPDATE CteEnviarA SET Plano = 33WHERE Cliente ='9067' AND ID = 11
+UPDATE CteEnviarA SET Plano = 41WHERE Cliente ='9067' AND ID = 12
+UPDATE CteEnviarA SET Plano = 50WHERE Cliente ='9067' AND ID = 13
+UPDATE CteEnviarA SET Plano = 53WHERE Cliente ='9067' AND ID = 14
+UPDATE CteEnviarA SET Plano = 60WHERE Cliente ='9067' AND ID = 15
+UPDATE CteEnviarA SET Plano = 70WHERE Cliente ='9067' AND ID = 16
+UPDATE CteEnviarA SET Plano = 13WHERE Cliente ='9067' AND ID = 17
+UPDATE CteEnviarA SET Plano = 14WHERE Cliente ='9067' AND ID = 18
+UPDATE CteEnviarA SET Plano = 17WHERE Cliente ='9067' AND ID = 19
+UPDATE CteEnviarA SET Plano = 18WHERE Cliente ='9067' AND ID = 20
+UPDATE CteEnviarA SET Plano = 31WHERE Cliente ='9067' AND ID = 21
+UPDATE CteEnviarA SET Plano = 51WHERE Cliente ='9067' AND ID = 22
+UPDATE CteEnviarA SET Plano = 11WHERE Cliente ='9067' AND ID = 23
+UPDATE CteEnviarA SET Plano = 22WHERE Cliente ='9067' AND ID = 24
+UPDATE CteEnviarA SET Plano = 71WHERE Cliente ='9067' AND ID = 25
+UPDATE CteEnviarA SET Plano = 72WHERE Cliente ='9067' AND ID = 26
+UPDATE CteEnviarA SET Plano = 54WHERE Cliente ='9067' AND ID = 27
+UPDATE CteEnviarA SET Plano = 73WHERE Cliente ='9067' AND ID = 28
+UPDATE CteEnviarA SET Plano = 34WHERE Cliente ='9067' AND ID = 29
+*/
+GO
+/************************** Tabla detalle de la addenda **************************/
+--drop table nvk_tb_DetalleAddendaOFIX
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE id = OBJECT_ID('dbo.nvk_tb_DetalleAddendaOFIX') AND type = 'U')
+CREATE TABLE dbo.nvk_tb_DetalleAddendaOFIX(
+
+Id					int not null,
+Renglon				FLOAT NOT NULL,
+RenglonSub			INT	NOT NULL,
+Articulo				varchar(20),
+Caja					int,
+Cantidad			float
+
+--CONSTRAINT prinvk_tb_DetalleAddendaOFIX PRIMARY KEY CLUSTERED (Id, Renglon, RenglonSub)
+)
+GO
+EXEC spADD_INDEX 'nvk_tb_DetalleAddendaOFIX', 'DetalleOfix', 'Id, Renglon, RenglonSub'
+
+GO
+/************************** STORED PROCEDURE **************************/
+if exists (select * from sysobjects where id = object_id('dbo.xpInvVerificarDetalle') and sysstat & 0xf = 4) 
+drop procedure dbo.xpInvVerificarDetalle
+GO
+CREATE PROCEDURE xpInvVerificarDetalle 
+@ID						int,  
+@Accion					char(20),  
+@Base					char(20),  
+@Empresa					char(5),  
+@Usuario					char(10),  
+@Modulo					char(5),  
+@Mov						char(20),  
+@MovID					varchar(20),  
+@MovTipo					char(20),  
+@MovMoneda				char(10),  
+@MovTipoCambio			float,  
+@Estatus					char(15),  
+@EstatusNuevo			char(15),  
+@FechaEmision			datetime,  
+@Renglon					float,  
+@RenglonSub				int,  
+@Articulo				char(20),  
+@Cantidad				float,  
+@Importe					money,  
+@ImporteNeto				money,  
+@Impuestos				money,  
+@ImpuestosNetos			money,  
+@Ok						int  OUTPUT,  
+@OkRef					varchar(255) OUTPUT  
+AS 
+BEGIN  
+DECLARE 
+@CantidadTMA				float,  
+@Ordenmov				varchar(20),  
+@CantidadTarima			float,
+@FactorAU				float,
+@Cajas					float,
+@i						INT = 1
+
+
+  
+SELECT @OrdenMov = InvOrdenEntarimado FROM EmpresaCfgMov WHERE Empresa = @Empresa  
+
+
+
+ IF @Modulo ='VTAS' AND @Ok IS NULL
+ BEGIN
+  IF @MovTipo = 'VTAS.VP' AND @Accion = 'AFECTAR'  
+  BEGIN  
+  --Con haber un articulo en PCKTarimaVentaPerdida debe validar todos   
+    IF EXISTS (SELECT 1 FROM PCKTarimaVentaPerdida WHERE IDVenta = @ID and Reacomodar = 1 /*AND Articulo = @Articulo */)  
+    BEGIN             
+   SELECT @CantidadTMA = 0  
+      SELECT @CantidadTMA = Sum(CantidadPicking) FROM PCKTarimaVentaPerdida WHERE IDVenta = @ID AND Empresa = @Empresa AND Articulo = @Articulo AND Reacomodar = 1  
+  
+      IF ISNULL(@Cantidad,0) > ISNULL(@CantidadTMA,0)  
+        SELECT @Ok = 13240,   
+               @OkREf = 'Articulo:'+ @Articulo + ' Cantidad perdida: '+ convert(varchar(16), ISNULL(@Cantidad,0)) + ' Cantidad a reacomodar: '+ convert(varchar(16), ISNULL(@CantidadTMA,0))  
+    END  
+  END
+  
+  IF @MovTipo = 'VTAS.F' AND @Mov ='Factura' AND @Accion = 'AFECTAR'
+  BEGIN
+
+  SELECT @FactorAU = AU.Factor 
+  FROM VentaD VD
+  LEFT JOIN ArtUnidad AU ON VD.Articulo = AU.Articulo AND AU.Unidad='CJA-CAJA'
+WHERE ID =@ID 
+AND Renglon = @Renglon 
+AND RenglonSub = @RenglonSub
+AND VD.Articulo=@Articulo
+
+IF COALESCE(@FactorAU, '') <> ''
+BEGIN
+	   SELECT @Cajas = @Cantidad / @FactorAU
+	   
+			WHILE (@Cajas >= @i)
+			BEGIN
+				INSERT INTO nvk_tb_DetalleAddendaOFIX 
+					--SELECT @Id,@Articulo,@i
+					SELECT @id,@Renglon,@RenglonSub,@Articulo,@i,@FactorAU
+				SET @i = @i + 1
+			END
+END
+ELSE
+SELECT @Ok = 10065, @OkRef = 'Debe indicar la unidad de empaque del articulo '+@Articulo
+
+
+  END
+
+ END
+ 
+
+  IF @Modulo = 'INV' AND @Mov = @OrdenMov  
+  BEGIN  
+    SELECT @CantidadTarima = CantidadTarima FROM Art a WHERE Articulo = @Articulo   
+ IF ISNULL(@CantidadTarima,1) <= 0.5
+ BEGIN   
+   SELECT @OK = 20015, @OkRef = 'Revisar configuración del artículo.  Su cantidad Tarima es 0 o 0.5: '+@Articulo   
+ END  
+ ELSE   
+ BEGIN  
+   IF @Cantidad/@CantidadTarima > 100  
+     SELECT @OK = 20015, @OkRef = 'Revisar configuración del artículo.  Excede mas de 100 tarimas a generar: '+@Articulo   
+    END  
+  
+  END  
+  
+RETURN  
+END  
+
+GO
+
 /************************** CONFIGURACION MOV **************************/
 IF NOT EXISTS (SELECT * FROM MovTipoCFDFlex WHERE Modulo = 'VTAS' AND Mov='Factura' AND Contacto = '9067')
 INSERT INTO MovTipoCFDFlex
@@ -119,6 +282,26 @@ AND a.unidad ='CJA-CAJA'
 RETURN(@TotalBultos)
 END
 GO
+
+IF EXISTS(SELECT * FROM SYSOBJECTS WHERE ID=OBJECT_ID('dbo.fnPesoTotal') AND TYPE = 'fn')
+DROP FUNCTION dbo.fnPesoTotal
+GO
+CREATE FUNCTION dbo.fnPesoTotal (@Id	int)
+RETURNS FLOAT
+AS
+BEGIN
+DECLARE
+@PesoT		float
+
+SELECT @PesoT = SUM((vd.Cantidad/AU.Factor)*a.Peso)
+  FROM VentaD vd
+  LEFT JOIN Art a ON vd.Articulo = a.Articulo
+  LEFT JOIN ArtUnidad AU ON AU.Articulo=VD.Articulo AND AU.Unidad='CJA-CAJA'
+  WHERE vd.ID = @Id
+
+RETURN(@PesoT)
+END
+GO
 /************************** Vista **************************/
 IF EXISTS (SELECT * FROM SYSOBJECTS WHERE ID = OBJECT_ID('dbo.CFDIVentaAddendas') AND type = 'V')
 DROP VIEW [dbo].[CFDIVentaAddendas]
@@ -129,9 +312,9 @@ AS
 SELECT DISTINCT REPLICATE('0',20-LEN(RTRIM(LTRIM(CONVERT(varchar,Vta.ID))))) + RTRIM(LTRIM(CONVERT(varchar,Vta.ID))) +          
   REPLICATE(' ',12) + REPLICATE(' ',7) + REPLICATE(' ',50)              OrdenExportacion, -- 4v3ng3r         
   Vta.ID                           ID,
-  Vta.Peso							Peso, --ADDENDA OFIX
-  Vta.EnviarA						EnviarA, --ADDENDA OFIX
+  CEA.Plano							EnviarA, --ADDENDA OFIX
   dbo.fnTotalBultosOfix(Vta.ID) AS TotalBultos, --ADDENDA OFIX
+  dbo.fnPesoTotal(Vta.ID) AS Peso,	--ADDENDA OFIX
   dbo.fnSerieConsecutivo(Vta.MovID)                    VentaSerie,          
   dbo.fnFolioConsecutivo(Vta.MovID)                    VentaFolio,          
   dbo.fnFechaConDiferenciaHoraria(CONVERT(datetime,Vta.FechaRegistro, 126), isnull(Sucursal.DifHorariaVerano, 0),isnull(Sucursal.DifHorariaInvierno, 0)) VentaFechaRegistro,          
@@ -214,7 +397,8 @@ THEN SucCP.ClaveCP ELSE cte.CodigoPostal END)) END                DomicilioFisca
  JOIN Mon ON Vta.Moneda = Mon.Moneda          
  JOIN Empresa ON Vta.Empresa = Empresa.Empresa          
  JOIN Sucursal ON Vta.Sucursal = Sucursal.Sucursal          
- JOIN Cte ON Cte.Cliente = Vta.Cliente          
+ JOIN Cte ON Cte.Cliente = Vta.Cliente
+ LEFT JOIN CteEnviarA CEA ON CEA.Cliente = vta.Cliente AND CEA.ID = vta.Sucursal
  JOIN EmpresaCFD ON Vta.Empresa = EmpresaCFD.Empresa          
 LEFT JOIN Causa c on Vta.Causa = c.Causa AND c.Modulo = 'VTAS'          
 LEFT JOIN SATMoneda SATMon ON Mon.Clave = SATMon.Clave          
@@ -242,7 +426,7 @@ LEFT JOIN Descuento ON Descuento.Descuento = Vta.Descuento
 LEFT JOIN VentaCFDIRelacionado vr ON vr.ID=vta.ID
 
 GO
-/*********************************************  CFDIVentaDV4  *************************************************************/
+/*********************************************  CFDIVentaDAddendas  *************************************************************/
 
 IF EXISTS (SELECT * FROM SYSOBJECTS WHERE ID = OBJECT_ID ('CFDIVentaDAddendas') AND TYPE ='V')
 DROP VIEW CFDIVentaDAddendas
@@ -257,9 +441,11 @@ AS
 	  Venta.Cliente,
       VD.Renglon,      
       VD.RenglonSub,
-	  dbo.fnRenglonID('VTAS',VD.ID,VD.Renglon,VD.RenglonSub) as Bulto, --ADDENDA OFIX
+	  ADO.Caja	AS Bulto, --ADDENDA OFIX
 	  TRIM(ArtCte.Presentacion) ArtCtePresentacion, --ADDENDA OFIX
+	  Art.Peso AS PesoGramos, --ADDENDA OFIX
 	  dbo.fnDetalleCantidadOrigen (VD.ID,Venta.Empresa,Venta.Sucursal,VD.Articulo,VD.Renglon) AS CantidadOrden, --ADDENDA OFIX
+	  ado.Cantidad AS CantidadOfix,
       CPS.Clave                     ClaveProdServ,      
       CU.ClaveUnidad                    ClaveUnidad,      
       dbo.fnXMLValor(VD.Unidad)                 VentaDUnidad,      
@@ -273,39 +459,18 @@ AS
 	  VD.CantidadPendiente,
 	  VD.CantidadCancelada,
 	  Art.Peso*VD.Cantidad-ISNULL(VD.CantidadObsequio,0)             PesoArt,
-      --CASE WHEN ISNULL(m.ObjetoImpuesto,sai.SatObjetoImp) = '03' THEN      
-      --     CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Precio'),0.00)      
-      --  ELSE (vtc.SubTotalSinDL/(VD.Cantidad-ISNULL(VD.CantidadObsequio,0)))+ ((ISNULL(vtc.Impuestos, 0.00) - ISNULL(vtc.Retencion1Total, 0.00) - ISNULL(vtc.Retencion2Total, 0.00) - ISNULL(vtc.Retencion3Total, 0.00)) / (VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) ) END      
-      --   ELSE      
-      --   CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Precio'),0.00)      
-      --ELSE vtc.SubTotalSinDL/(VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) END        
-      --   END    VentaDPrecio,   
+ 
          CASE WHEN (VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) = 0      
      THEN (CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Precio'),0.00) ELSE vtc.PrecioSinDL END)      
      ELSE (CASE WHEN vtc.RenglonTipo = 'J' THEN /*ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Importe'),0.00)*/ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotal'),0.00) ELSE vtc.Importe END/vtc.Cantidad)*dbo.fnCFDTipoCambioMN(Venta.TipoCambio, ISNULL(mt.SAT_MN, EmpresaCFD.SAT_MN))      
       END                       VentaDPrecio,  
   
-      --   CASE WHEN ISNULL(m.ObjetoImpuesto,sai.SatObjetoImp) = '03' THEN      
-      --     CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotalSinDL'),0.00)      
-      --  ELSE vtc.SubTotalSinDL + ISNULL(vtc.Impuestos, 0.00) - ISNULL(vtc.Retencion1Total, 0.00) - ISNULL(vtc.Retencion2Total, 0.00) - ISNULL(vtc.Retencion3Total, 0.00) END      
-      --   ELSE      
-      --CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotalSinDL'),0.00)      
-      --ELSE vtc.SubTotalSinDL END       
-      --   END VentaDImporte,    
-   -----  
-         CASE WHEN (VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) = 0      
+		CASE WHEN (VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) = 0      
      THEN (CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Precio'),0.00) ELSE vtc.PrecioSinDL END*VD.Cantidad)      
      ELSE CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotal'),0.00) ELSE vtc.SubTotal END*dbo.fnCFDTipoCambioMN(Venta.TipoCambio, ISNULL(mt.SAT_MN, EmpresaCFD.SAT_MN))          
       END                       VentaDImporte,  
-  
-  
-  
-  
-     -- CASE WHEN EmpresaCfg.VentaPreciosImpuestoIncluido = 1      
-     --THEN CASE WHEN vtc.RenglonTipo = 'J' THEN NULLIF(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'ImpIncDescuentosTotales'),0.00) ELSE NULLIF(vtc.ImpIncDescuentosTotales,0.00) END      
-     --ELSE CASE WHEN vtc.RenglonTipo = 'J' THEN NULLIF(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'DescuentosTotales'),0.00) ELSE NULLIF(vtc.DescuentosTotales,0.00) END      
-     -- END              
-  0  VentaDDescuentoImporte,      
+        
+		0  VentaDDescuentoImporte,      
       CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotal'),0.00)      
       ELSE vtc.SubTotal END                  VentaDImpuestoBase,      
       dbo.fnXMLValor(Art.Descripcion1)                VentaDDescripcion,      
@@ -329,118 +494,24 @@ AS
       ISNULL(m.ObjetoImpuesto,sai.SatObjetoImp)             ObjetoImp   ,
 	  VD.DescripcionExtra VentaDDescripcionExtra,
 	   VTC.TotalNeto  TotalNetoD
-    FROM Venta      
-    JOIN VentaD VD    ON Venta.ID = VD.ID      
-    JOIN Art      ON VD.Articulo = Art.Articulo
-	LEFT JOIN ArtCte ON VD.Articulo = ArtCte.Articulo AND ArtCte.Cliente=Venta.Cliente
-  LEFT JOIN MovObjetoImpuesto m  ON m.Modulo = 'VTAS' AND m.ModuloID=VD.ID AND vd.RenglonID=m.RenglonID AND vd.Renglon = m.Renglon AND vd.RenglonSub = m.RenglonSub      
-  LEFT JOIN SATArticuloInfo SAI  ON VD.Articulo = SAI.Articulo      
-  LEFT JOIN Unidad U     ON ISNULL(VD.Unidad, Art.Unidad) = U.Unidad      
-    JOIN EmpresaCFD    ON Venta.Empresa = EmpresaCFD.Empresa      
-       JOIN MovTipo mt    ON mt.Modulo = 'VTAS' AND mt.Mov = Venta.Mov      
-    JOIN EmpresaCfg    ON Venta.Empresa = EmpresaCfg.Empresa      
-    JOIN VentaTCalc vtc   ON vtc.ID = VD.ID AND vtc.Renglon = VD.Renglon AND vtc.RenglonSub = VD.RenglonSub      
-  LEFT JOIN SATCatClaveProdServ CPS ON SAI.ClaveSAT = CPS.Clave      
-  LEFT JOIN SATCatClaveUnidad CU  ON U.ClaveSAT = CU.ClaveUnidad      
-   WHERE VD.RenglonTipo NOT IN ('C','E') AND VD.Cantidad-ISNULL(VD.CantidadObsequio,0) <> 0  
-/*   
-IF EXISTS (SELECT * FROM SYSOBJECTS WHERE ID = OBJECT_ID ('CFDIVentaDV4') AND TYPE ='V')
-DROP VIEW CFDIVentaDV4
-GO  
- CREATE VIEW CFDIVentaDV4
-AS      
-    
-  SELECT REPLICATE('0',20-LEN(RTRIM(LTRIM(CONVERT(varchar,VD.ID))))) + RTRIM(LTRIM(CONVERT(varchar,VD.ID))) +      
-      REPLICATE('0',12-LEN(RTRIM(LTRIM(CONVERT(varchar,CONVERT(int,VD.Renglon)))))) + RTRIM(LTRIM(CONVERT(varchar,CONVERT(int,VD.Renglon)))) +      
-      REPLICATE(' ',50)     OrdenExportacion,      
-      VD.ID,
-	  Venta.Cliente,
-      VD.Renglon,      
-      VD.RenglonSub,      
-      CPS.Clave                     ClaveProdServ,      
-      CU.ClaveUnidad                    ClaveUnidad,      
-      dbo.fnXMLValor(VD.Unidad)                 VentaDUnidad,      
-      dbo.fnXMLValor(VD.Articulo)                 VentaDArticulo,      
-      dbo.fnXMLValor(VD.SubCuenta)                 VentaDSubCuenta,      
-      VD.Cantidad-ISNULL(VD.CantidadObsequio,0)             VentaDCantidad,
-	  VD.Aplica,
-	  VD.AplicaID,
-	  VD.Cantidad,
-	  VD.CantidadA,
-	  VD.CantidadPendiente,
-	  VD.CantidadCancelada,
-	  Art.Peso*VD.Cantidad-ISNULL(VD.CantidadObsequio,0)             PesoArt,
-      --CASE WHEN ISNULL(m.ObjetoImpuesto,sai.SatObjetoImp) = '03' THEN      
-      --     CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Precio'),0.00)      
-      --  ELSE (vtc.SubTotalSinDL/(VD.Cantidad-ISNULL(VD.CantidadObsequio,0)))+ ((ISNULL(vtc.Impuestos, 0.00) - ISNULL(vtc.Retencion1Total, 0.00) - ISNULL(vtc.Retencion2Total, 0.00) - ISNULL(vtc.Retencion3Total, 0.00)) / (VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) ) END      
-      --   ELSE      
-      --   CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Precio'),0.00)      
-      --ELSE vtc.SubTotalSinDL/(VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) END        
-      --   END    VentaDPrecio,   
-         CASE WHEN (VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) = 0      
-     THEN (CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Precio'),0.00) ELSE vtc.PrecioSinDL END)      
-     ELSE (CASE WHEN vtc.RenglonTipo = 'J' THEN /*ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Importe'),0.00)*/ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotal'),0.00) ELSE vtc.Importe END/vtc.Cantidad)*dbo.fnCFDTipoCambioMN(Venta.TipoCambio, ISNULL(mt.SAT_MN, EmpresaCFD.SAT_MN))      
-      END                       VentaDPrecio,  
-  
-      --   CASE WHEN ISNULL(m.ObjetoImpuesto,sai.SatObjetoImp) = '03' THEN      
-      --     CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotalSinDL'),0.00)      
-      --  ELSE vtc.SubTotalSinDL + ISNULL(vtc.Impuestos, 0.00) - ISNULL(vtc.Retencion1Total, 0.00) - ISNULL(vtc.Retencion2Total, 0.00) - ISNULL(vtc.Retencion3Total, 0.00) END      
-      --   ELSE      
-      --CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotalSinDL'),0.00)      
-      --ELSE vtc.SubTotalSinDL END       
-      --   END VentaDImporte,    
-   -----  
-         CASE WHEN (VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) = 0      
-     THEN (CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Precio'),0.00) ELSE vtc.PrecioSinDL END*VD.Cantidad)      
-     ELSE CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotal'),0.00) ELSE vtc.SubTotal END*dbo.fnCFDTipoCambioMN(Venta.TipoCambio, ISNULL(mt.SAT_MN, EmpresaCFD.SAT_MN))          
-      END                       VentaDImporte,  
-  
-  
-  
-  
-     -- CASE WHEN EmpresaCfg.VentaPreciosImpuestoIncluido = 1      
-     --THEN CASE WHEN vtc.RenglonTipo = 'J' THEN NULLIF(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'ImpIncDescuentosTotales'),0.00) ELSE NULLIF(vtc.ImpIncDescuentosTotales,0.00) END      
-     --ELSE CASE WHEN vtc.RenglonTipo = 'J' THEN NULLIF(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'DescuentosTotales'),0.00) ELSE NULLIF(vtc.DescuentosTotales,0.00) END      
-     -- END              
-  0  VentaDDescuentoImporte,      
-      CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotal'),0.00)      
-      ELSE vtc.SubTotal END                  VentaDImpuestoBase,      
-      dbo.fnXMLValor(Art.Descripcion1)                VentaDDescripcion,      
-      dbo.fnXMLValor(Art.Descripcion2)                VentaDDescripcion2,      
-      SAI.CuentaPredial                   CuentaPredialV,      
-      dbo.fnQueCodigo(EmpresaCFD.EAN13, VD.Articulo, VD.SubCuenta, VD.Codigo, Venta.Cliente)  EAN13,      
-      dbo.fnQueCodigo(EmpresaCFD.SKU, VD.Articulo, VD.SubCuenta, VD.Codigo, Venta.Cliente)   SKUCliente,      
-      U.Clave                      UnidadClave,      
-      CASE WHEN (VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) = 0      
-     THEN (CASE WHEN vtc.RenglonTipo = 'J' THEN  ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Precio'),0.00) ELSE vtc.PrecioSinDL END)      
-     ELSE (CASE WHEN vtc.RenglonTipo = 'J' THEN /*ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Importe'),0.00)*/ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotal'),0.00) ELSE vtc.Importe END/vtc.Cantidad)*dbo.fnCFDTipoCambioMN(Venta.TipoCambio, ISNULL(mt.SAT_MN, EmpresaCFD.SAT_MN))      
-      END                       VentaDImporteUnitario,      
-      CASE WHEN (VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) = 0      
-     THEN (CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotal'),0.00) ELSE vtc.PrecioSinDL END)      
-     ELSE (CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotal'),0.00) ELSE vtc.SubTotal END/Vtc.Cantidad)*dbo.fnCFDTipoCambioMN(Venta.TipoCambio, ISNULL(mt.SAT_MN, EmpresaCFD.SAT_MN))      
-      END                       VentaDSubTotalUnitario,      
-      CASE WHEN (VD.Cantidad-ISNULL(VD.CantidadObsequio,0)) = 0      
-     THEN (CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'Precio'),0.00) ELSE vtc.PrecioSinDL END*VD.Cantidad)      
-     ELSE CASE WHEN vtc.RenglonTipo = 'J' THEN ISNULL(dbo.fnImporteJuego(VD.ID,VD.RenglonID,'SubTotal'),0.00) ELSE vtc.SubTotal END*dbo.fnCFDTipoCambioMN(Venta.TipoCambio, ISNULL(mt.SAT_MN, EmpresaCFD.SAT_MN))          
-      END                       VentaDSubTotal,      
-      ISNULL(m.ObjetoImpuesto,sai.SatObjetoImp)             ObjetoImp   ,
-	  VD.DescripcionExtra VentaDDescripcionExtra,
-	   VTC.TotalNeto  TotalNetoD
-    FROM Venta      
-    JOIN VentaD VD    ON Venta.ID = VD.ID      
-    JOIN Art      ON VD.Articulo = Art.Articulo      
-  LEFT JOIN MovObjetoImpuesto m  ON m.Modulo = 'VTAS' AND m.ModuloID=VD.ID AND vd.RenglonID=m.RenglonID AND vd.Renglon = m.Renglon AND vd.RenglonSub = m.RenglonSub      
-  LEFT JOIN SATArticuloInfo SAI  ON VD.Articulo = SAI.Articulo      
-  LEFT JOIN Unidad U     ON ISNULL(VD.Unidad, Art.Unidad) = U.Unidad      
-    JOIN EmpresaCFD    ON Venta.Empresa = EmpresaCFD.Empresa      
-       JOIN MovTipo mt    ON mt.Modulo = 'VTAS' AND mt.Mov = Venta.Mov      
-    JOIN EmpresaCfg    ON Venta.Empresa = EmpresaCfg.Empresa      
-    JOIN VentaTCalc vtc   ON vtc.ID = VD.ID AND vtc.Renglon = VD.Renglon AND vtc.RenglonSub = VD.RenglonSub      
-  LEFT JOIN SATCatClaveProdServ CPS ON SAI.ClaveSAT = CPS.Clave      
-  LEFT JOIN SATCatClaveUnidad CU  ON U.ClaveSAT = CU.ClaveUnidad      
-   WHERE VD.RenglonTipo NOT IN ('C','E') AND VD.Cantidad-ISNULL(VD.CantidadObsequio,0) <> 
-  */
- GO
+    FROM			Venta      
+    JOIN			VentaD VD    ON Venta.ID = VD.ID      
+    JOIN			Art			 ON VD.Articulo = Art.Articulo
+	JOIN			nvk_tb_DetalleAddendaOFIX ado ON ado.Id=VD.ID AND ado.Articulo=VD.Articulo AND ado.Renglon = VD.Renglon AND ado.RenglonSub = VD.RenglonSub
+	LEFT JOIN		ArtCte		 ON VD.Articulo = ArtCte.Articulo AND ArtCte.Cliente=Venta.Cliente
+	LEFT JOIN		MovObjetoImpuesto m  ON m.Modulo = 'VTAS' AND m.ModuloID=VD.ID AND vd.RenglonID=m.RenglonID AND vd.Renglon = m.Renglon AND vd.RenglonSub = m.RenglonSub      
+	LEFT JOIN		SATArticuloInfo SAI  ON VD.Articulo = SAI.Articulo      
+	LEFT JOIN		Unidad U     ON ISNULL(VD.Unidad, Art.Unidad) = U.Unidad      
+    JOIN			EmpresaCFD   ON Venta.Empresa = EmpresaCFD.Empresa      
+    JOIN			MovTipo mt   ON mt.Modulo = 'VTAS' AND mt.Mov = Venta.Mov      
+    JOIN			EmpresaCfg   ON Venta.Empresa = EmpresaCfg.Empresa      
+    JOIN			VentaTCalc vtc   ON vtc.ID = VD.ID AND vtc.Renglon = VD.Renglon AND vtc.RenglonSub = VD.RenglonSub      
+	LEFT JOIN		SATCatClaveProdServ CPS ON SAI.ClaveSAT = CPS.Clave      
+	LEFT JOIN		SATCatClaveUnidad CU  ON U.ClaveSAT = CU.ClaveUnidad      
+   WHERE VD.RenglonTipo NOT IN ('C','E') 
+     AND VD.Cantidad-ISNULL(VD.CantidadObsequio,0) <> 0  
+
+GO
 /************************** eDoc **************************/
 
 IF EXISTS (SELECT * FROM eDoc WHERE Modulo = 'VTAS' AND eDoc = 'OFIX')
@@ -471,7 +542,7 @@ IF EXISTS (SELECT * FROM eDocD WHERE Modulo = 'VTAS' and eDoc = 'OFIX')
 DELETE FROM eDocD WHERE Modulo = 'VTAS' AND eDoc = 'OFIX'
 GO
 INSERT INTO eDocD (Modulo,eDoc,Orden,Seccion,SubSeccionDe,Vista,Cierre,TablaSt)
-SELECT Modulo,'OFIX',Orden,CASE WHEN Seccion = 'Tony' THEN 'Encabezado' WHEN Seccion = 'Detalles' THEN 'Detalle' ELSE Seccion END,SubSeccionDe,CASE WHEN Seccion ='Detalle' THEN 'CFDIVentaDAddendas' ELSE 'CFDIVentaAddendas' END,Cierre,TablaSt 
+SELECT Modulo,'OFIX',Orden,CASE WHEN Seccion = 'Tony' THEN 'Encabezado' WHEN Seccion = 'Detalles' THEN 'Detalle' ELSE Seccion END,SubSeccionDe,CASE WHEN Seccion ='Detalles' THEN 'CFDIVentaDAddendas' ELSE 'CFDIVentaAddendas' END,Cierre,TablaSt 
 FROM eDocD 
  WHERE Modulo = 'VTAS' and eDoc = 'TONY'
 GO
@@ -542,7 +613,7 @@ UNION ALL
 SELECT 'VTAS','OFIX',
 		(SELECT RID FROM eDocD WHERE Modulo = 'VTAS' and eDoc = 'OFIX' AND Seccion = 'Detalle'),
 '[CantidadFactura]',
-'VentaDCantidad',
+'CantidadOfix',
 FormatoOpcional,Traducir,Opcional,BorrarSiOpcional,TablaSt,Decimales,CaracterExtendidoAASCII,ConvertirPaginaCodigo437,ConvertirComillaDobleAASCII,NumericoNuloACero
 FROM eDocDMapeoCampo
 WHERE Modulo = 'VTAS' and eDoc = 'TONY' AND CampoXML = '[Articulo]' and idseccion=3189
@@ -550,7 +621,7 @@ UNION ALL
 SELECT 'VTAS','OFIX',
 		(SELECT RID FROM eDocD WHERE Modulo = 'VTAS' and eDoc = 'OFIX' AND Seccion = 'Detalle'),
 '[CantidadOrden]',
-'CantidadOrden',
+'CantidadOfix',
 FormatoOpcional,Traducir,Opcional,BorrarSiOpcional,TablaSt,Decimales,CaracterExtendidoAASCII,ConvertirPaginaCodigo437,ConvertirComillaDobleAASCII,NumericoNuloACero
 FROM eDocDMapeoCampo
 WHERE Modulo = 'VTAS' and eDoc = 'TONY' AND CampoXML = '[Articulo]' and idseccion=3189
@@ -558,7 +629,7 @@ UNION ALL
 SELECT 'VTAS','OFIX',
 		(SELECT RID FROM eDocD WHERE Modulo = 'VTAS' and eDoc = 'OFIX' AND Seccion = 'Detalle'),
 '[PesoUnidadFacturaGr]',
-'PesoArt',
+'PesoGramos',
 FormatoOpcional,Traducir,Opcional,BorrarSiOpcional,TablaSt,Decimales,CaracterExtendidoAASCII,ConvertirPaginaCodigo437,ConvertirComillaDobleAASCII,NumericoNuloACero
 FROM eDocDMapeoCampo
 WHERE Modulo = 'VTAS' and eDoc = 'TONY' AND CampoXML = '[Articulo]' and idseccion=3189
